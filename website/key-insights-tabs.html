@@ -1,0 +1,190 @@
+<!-- Key Insights: ROAS and action list by channel. CSS-only tabs, no JavaScript. -->
+<style>
+  .dpr-insights {
+    max-width: 900px;
+    margin: 2rem auto;
+    color: #1f1f1f;
+    font-family: inherit;
+    line-height: 1.4;
+  }
+
+  /* radios are hidden visually but stay keyboard-focusable */
+  .dpr-insights input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+  }
+
+  /* tab bar */
+  .dpr-insights .dpr-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    border-bottom: 2px solid #e3e2dd;
+    margin-bottom: 1.25rem;
+  }
+  .dpr-insights .dpr-tabs label {
+    padding: 0.6rem 1rem;
+    margin-bottom: -2px;
+    border-bottom: 3px solid transparent;
+    color: #52514e;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .dpr-insights .dpr-tabs label:hover {
+    color: #1f1f1f;
+  }
+
+  /* panels are hidden until their radio is checked */
+  .dpr-insights .dpr-panel {
+    display: none;
+  }
+
+  /* selected tab: one line per channel */
+  .dpr-insights #dpr-email:checked ~ .dpr-tabs label[for="dpr-email"],
+  .dpr-insights #dpr-influencer:checked ~ .dpr-tabs label[for="dpr-influencer"],
+  .dpr-insights #dpr-paid:checked ~ .dpr-tabs label[for="dpr-paid"],
+  .dpr-insights #dpr-seo:checked ~ .dpr-tabs label[for="dpr-seo"],
+  .dpr-insights #dpr-social:checked ~ .dpr-tabs label[for="dpr-social"] {
+    color: #2a78d6;
+    border-bottom-color: #2a78d6;
+  }
+
+  /* matching panel */
+  .dpr-insights #dpr-email:checked ~ .dpr-panel-email,
+  .dpr-insights #dpr-influencer:checked ~ .dpr-panel-influencer,
+  .dpr-insights #dpr-paid:checked ~ .dpr-panel-paid,
+  .dpr-insights #dpr-seo:checked ~ .dpr-panel-seo,
+  .dpr-insights #dpr-social:checked ~ .dpr-panel-social {
+    display: block;
+  }
+
+  /* visible focus ring when using the keyboard (Tab, then arrow keys) */
+  .dpr-insights #dpr-email:focus-visible ~ .dpr-tabs label[for="dpr-email"],
+  .dpr-insights #dpr-influencer:focus-visible ~ .dpr-tabs label[for="dpr-influencer"],
+  .dpr-insights #dpr-paid:focus-visible ~ .dpr-tabs label[for="dpr-paid"],
+  .dpr-insights #dpr-seo:focus-visible ~ .dpr-tabs label[for="dpr-seo"],
+  .dpr-insights #dpr-social:focus-visible ~ .dpr-tabs label[for="dpr-social"] {
+    outline: 2px solid #2a78d6;
+    outline-offset: 2px;
+  }
+
+  /* KPI cards */
+  .dpr-insights .dpr-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+  }
+  .dpr-insights .dpr-card {
+    background: #f1f0ec;
+    border-radius: 8px;
+    padding: 1rem 1.1rem;
+  }
+  .dpr-insights .dpr-card p {
+    margin: 0;
+  }
+  .dpr-insights .dpr-label {
+    font-size: 0.85rem;
+    color: #52514e;
+  }
+  .dpr-insights .dpr-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-top: 0.2rem;
+  }
+  .dpr-insights .dpr-sub {
+    font-size: 0.8rem;
+    color: #52514e;
+    margin-top: 0.2rem;
+  }
+  .dpr-insights .dpr-card-alert {
+    background: #fbe3e3;
+  }
+  .dpr-insights .dpr-card-alert .dpr-value {
+    color: #9c1c1c;
+  }
+
+  .dpr-insights .dpr-takeaway {
+    margin: 1rem 0 0;
+  }
+  .dpr-insights .dpr-source {
+    margin: 1.5rem 0 0;
+    font-size: 0.8rem;
+    color: #52514e;
+  }
+</style>
+
+<div class="dpr-insights">
+  <!-- one radio per tab; same name so only one can be selected -->
+  <input type="radio" name="dpr-channel" id="dpr-email" checked>
+  <input type="radio" name="dpr-channel" id="dpr-influencer">
+  <input type="radio" name="dpr-channel" id="dpr-paid">
+  <input type="radio" name="dpr-channel" id="dpr-seo">
+  <input type="radio" name="dpr-channel" id="dpr-social">
+
+  <div class="dpr-tabs">
+    <label for="dpr-email">Email</label>
+    <label for="dpr-influencer">Influencer</label>
+    <label for="dpr-paid">Paid Ads</label>
+    <label for="dpr-seo">SEO</label>
+    <label for="dpr-social">Social Media</label>
+  </div>
+
+  <div class="dpr-panel dpr-panel-email">
+    <div class="dpr-cards">
+      <div class="dpr-card"><p class="dpr-label">Revenue</p><p class="dpr-value">₹568.5 Cr</p></div>
+      <div class="dpr-card"><p class="dpr-label">Spend</p><p class="dpr-value">₹193.9 Cr</p></div>
+      <div class="dpr-card"><p class="dpr-label">Return on ad spend</p><p class="dpr-value">₹2.93</p><p class="dpr-sub">per ₹1 · rank 5 of 5 · −0.8% vs average</p></div>
+      <div class="dpr-card"><p class="dpr-label">Conversion rate</p><p class="dpr-value">22.1%</p><p class="dpr-sub">of clicks</p></div>
+      <div class="dpr-card dpr-card-alert"><p class="dpr-label">Action-list campaigns</p><p class="dpr-value">51</p><p class="dpr-sub">below ₹0.11 per ₹1 · lost&nbsp;₹1.1&nbsp;Cr</p></div>
+    </div>
+    <p class="dpr-takeaway">Email has the lowest return of the five channels, but only by a small margin. Fixing its 51 weakest campaigns matters more than cutting the channel.</p>
+  </div>
+
+  <div class="dpr-panel dpr-panel-influencer">
+    <div class="dpr-cards">
+      <div class="dpr-card"><p class="dpr-label">Revenue</p><p class="dpr-value">₹576.9 Cr</p></div>
+      <div class="dpr-card"><p class="dpr-label">Spend</p><p class="dpr-value">₹195.6 Cr</p></div>
+      <div class="dpr-card"><p class="dpr-label">Return on ad spend</p><p class="dpr-value">₹2.95</p><p class="dpr-sub">per ₹1 · rank 4 of 5 · −0.2% vs average</p></div>
+      <div class="dpr-card"><p class="dpr-label">Conversion rate</p><p class="dpr-value">22.0%</p><p class="dpr-sub">of clicks</p></div>
+      <div class="dpr-card dpr-card-alert"><p class="dpr-label">Action-list campaigns</p><p class="dpr-value">47</p><p class="dpr-sub">below ₹0.11 per ₹1 · lost&nbsp;₹1.0&nbsp;Cr</p></div>
+    </div>
+    <p class="dpr-takeaway">Influencer has the highest revenue and spend of any channel and the fewest action-list campaigns (47).</p>
+  </div>
+
+  <div class="dpr-panel dpr-panel-paid">
+    <div class="dpr-cards">
+      <div class="dpr-card"><p class="dpr-label">Revenue</p><p class="dpr-value">₹575.1 Cr</p></div>
+      <div class="dpr-card"><p class="dpr-label">Spend</p><p class="dpr-value">₹194.4 Cr</p></div>
+      <div class="dpr-card"><p class="dpr-label">Return on ad spend</p><p class="dpr-value">₹2.96</p><p class="dpr-sub">per ₹1 · rank 3 of 5 · +0.1% vs average</p></div>
+      <div class="dpr-card"><p class="dpr-label">Conversion rate</p><p class="dpr-value">21.9%</p><p class="dpr-sub">of clicks</p></div>
+      <div class="dpr-card dpr-card-alert"><p class="dpr-label">Action-list campaigns</p><p class="dpr-value">52</p><p class="dpr-sub">below ₹0.11 per ₹1 · lost&nbsp;₹1.2&nbsp;Cr</p></div>
+    </div>
+    <p class="dpr-takeaway">Paid Ads is the middle channel: within 0.1% of the overall average return of ₹2.95 per ₹1.</p>
+  </div>
+
+  <div class="dpr-panel dpr-panel-seo">
+    <div class="dpr-cards">
+      <div class="dpr-card"><p class="dpr-label">Revenue</p><p class="dpr-value">₹569.9 Cr</p></div>
+      <div class="dpr-card"><p class="dpr-label">Spend</p><p class="dpr-value">₹192.5 Cr</p></div>
+      <div class="dpr-card"><p class="dpr-label">Return on ad spend</p><p class="dpr-value">₹2.96</p><p class="dpr-sub">per ₹1 · rank 2 of 5 · +0.2% vs average</p></div>
+      <div class="dpr-card"><p class="dpr-label">Conversion rate</p><p class="dpr-value">22.0%</p><p class="dpr-sub">of clicks</p></div>
+      <div class="dpr-card dpr-card-alert"><p class="dpr-label">Action-list campaigns</p><p class="dpr-value">58</p><p class="dpr-sub">below ₹0.11 per ₹1 · lost&nbsp;₹1.3&nbsp;Cr</p></div>
+    </div>
+    <p class="dpr-takeaway">SEO has the lowest spend of the five channels and the second-highest return.</p>
+  </div>
+
+  <div class="dpr-panel dpr-panel-social">
+    <div class="dpr-cards">
+      <div class="dpr-card"><p class="dpr-label">Revenue</p><p class="dpr-value">₹575.2 Cr</p></div>
+      <div class="dpr-card"><p class="dpr-label">Spend</p><p class="dpr-value">₹193.5 Cr</p></div>
+      <div class="dpr-card"><p class="dpr-label">Return on ad spend</p><p class="dpr-value">₹2.97</p><p class="dpr-sub">per ₹1 · rank 1 of 5 · +0.6% vs average</p></div>
+      <div class="dpr-card"><p class="dpr-label">Conversion rate</p><p class="dpr-value">22.1%</p><p class="dpr-sub">of clicks</p></div>
+      <div class="dpr-card dpr-card-alert"><p class="dpr-label">Action-list campaigns</p><p class="dpr-value">60</p><p class="dpr-sub">below ₹0.12 per ₹1 · lost&nbsp;₹1.3&nbsp;Cr</p></div>
+    </div>
+    <p class="dpr-takeaway">Social Media has the best return, but also the most action-list campaigns (60). A strong channel can still hide weak campaigns.</p>
+  </div>
+
+  <p class="dpr-source">All five channels are within 1.4% of each other on return on ad spend. Action-list campaigns fell below their channel's normal floor of return (log-scale IQR rule). Data: Nykaa Marketing Campaign Performance Dataset (synthetic), 55,555 campaigns, Jul 2024 – Jun 2025.</p>
+</div>

@@ -120,7 +120,16 @@ The headline: channels and segments perform almost identically, but individual c
 
 **Excel sheets:** Summary, By Channel, By Segment, By Duration, By Platform, By Campaign (top and bottom 25), Outliers, Weekly Trend, Data Quality, All Campaigns.
 
-**PowerPoint slides:** title, KPI overview, channel comparison, segment comparison, top and bottom campaigns, weekly trend, key findings, recommendations.
+**PowerPoint slides:** title, KPI overview, channel comparison, segment comparison, low-return action list, weekly trend, key findings, recommendations.
+
+## Live site
+
+The channel results are published at **https://digitalperformanceinsights.wordpress.com**, on the Key Insights page. It has one section per channel with revenue, spend, ROAS, conversion rate and the number of action-list campaigns.
+
+There are two versions of that section in `website/`:
+
+- **`key-insights-accordion.html` (used on the live site).** Each channel is a `<details>`/`<summary>` block that opens and closes on click, with all styling in inline `style` attributes. The free WordPress.com plan strips `<style>` and `<input>` tags from Custom HTML blocks, so this version uses neither.
+- **`key-insights-tabs.html` (the original design).** CSS-only tabs built with hidden radio buttons and a `<style>` block, with no JavaScript. It works on any host that allows `<style>` and `<input>`, but not on the free WordPress.com plan, so it's kept here as the original design.
 
 ## Project structure
 
@@ -139,6 +148,7 @@ reporter/
   pptx_report.py       PowerPoint deck (python-pptx)
   formatting.py        shared number formats and colours
 tests/                 pytest tests for cleaning, KPIs, anomalies and a full run
+website/               Key Insights snippets for the WordPress site
 ```
 
 ## Notes on the data
