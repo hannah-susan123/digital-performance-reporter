@@ -19,7 +19,7 @@ This tool automates that whole loop. The data goes in, a consistent report comes
 | **Config** | `config.yaml` maps the dataset's column names to standard names. A different dataset only needs a new mapping, no code changes. |
 | **Clean** | Checks for missing values, duplicates and impossible values (clicks > impressions, negative spend, conversion rate outside 0-100%, conversions > clicks). Bad rows are removed or flagged, and the reported ROI is cross-checked against revenue and spend. Prints a data-quality summary. |
 | **KPIs** | CTR, conversion rate, cost per click, cost per conversion, revenue, ROI and ROAS, broken down by channel, customer segment, campaign length, platform and campaign. Group figures come from totals, not averages of ratios. |
-| **Anomalies** | Weekly trend with week-on-week moves above 20% flagged (partial weeks are excluded). Campaigns with unusual ROI or cost per conversion for their channel are flagged as outliers, using either the IQR rule (default) or z-scores, set in `config.yaml`. |
+| **Anomalies** | Weekly trend with week-on-week moves above 20% flagged (partial weeks are excluded). Campaigns with unusual return or cost per conversion for their channel are flagged as outliers: log-scale IQR by default, with plain IQR or z-scores as options in `config.yaml`. Low-return outliers become an action list, biggest loss first. |
 | **Insights** | 4-6 plain-English findings and recommendations, written by simple rules from the KPI tables. If the gap between the best and worst group is under 5%, the wording says so instead of overselling a winner. |
 | **AI summary (optional)** | `--ai` sends the findings to Gemini for a short executive summary. The report works fully without it. |
 | **Outputs** | Excel report with KPI cards, native charts, number formatting and red highlighting for weak performers; 8-slide PowerPoint where every title states the finding; PNG charts for a website. |
@@ -147,15 +147,22 @@ tests/                 pytest tests for cleaning, KPIs, anomalies and a full run
 
 ### Choosing an outlier method
 
-ROI here is heavily right-skewed: most campaigns sit between -100% and +400%, with a long tail up to +7,400%. The two methods behave differently on that shape:
+Return here is heavily right-skewed: most campaigns return between ₹0 and ₹5 per ₹1, with a long tail up to ₹75. Each method compares a campaign with the other campaigns in its own channel. They behave very differently on this shape:
 
-| Method | Setting | Flagged on this dataset |
-|---|---|---|
-| IQR, 1.5× (default) | `outlier_method: "iqr"` | 8,928 campaigns (16.1%) |
-| IQR, 3× | `iqr_multiplier: 3.0` | 3,854 (6.9%) |
-| Z-score, 3 std devs | `outlier_method: "zscore"` | 2,271 (4.1%) |
+| Method | Setting | What it compares | Flagged | Low-return flagged |
+|---|---|---|---|---|
+| **Log IQR (default)** | `outlier_method: "log_iqr"` | log(ROAS), log(cost per conversion) | **427 (0.8%)** | **268** |
+| IQR | `outlier_method: "iqr"` | ROI, cost per conversion | 8,928 (16.1%) | 0 |
+| Z-score | `outlier_method: "zscore"` | ROI, cost per conversion | 2,271 (4.1%) | 0 |
 
-The IQR rule is robust in the sense that extreme values can't hide themselves by inflating the standard deviation (there is a test for exactly this). But its fences are symmetric, so on a long right tail it flags a lot of the tail. All flags in this dataset are on the high side: unusually high ROI or unusually high cost per conversion.
+All three use `iqr_multiplier: 1.5` or `outlier_z: 3.0`.
+
+**Why log IQR is the default:**
+
+- **Plain IQR and z-score can't see weak campaigns.** ROI can't fall below -100%, but the long upper tail stretches their limits so far that the lower limit sits around -440% ROI. That's impossible, so not a single low-return campaign is ever flagged. Everything they flag is on the high side.
+- **Taking the log evens out the shape.** On a log scale, going from ₹0.10 to ₹1 back per ₹1 is the same distance as going from ₹1 to ₹10. The distribution becomes roughly symmetric, so the IQR fences work on both sides. Each channel's lower limit lands at a sensible ₹0.11–0.12 per ₹1.
+- **The log is taken of ROAS, not ROI.** ROAS (revenue ÷ spend) is always positive; ROI can be negative, and the log of a negative number doesn't exist. A campaign with zero revenue is treated as ROAS 0.001 so it can still be logged, and it is always flagged.
+- **The result is a short action list.** The 268 low-return campaigns returned under ₹0.12 per ₹1: they spent ₹6.4 Cr and brought back ₹53 L. They appear first in the Outliers sheet, biggest loss first. The other 159 outliers (33 unusually strong campaigns, plus unusual cost per conversion) are listed below them.
 
 ## Dataset
 
