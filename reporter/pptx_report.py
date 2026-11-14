@@ -7,7 +7,7 @@ from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Inches, Pt
 
-from .formatting import BLUE, INK, INK_SOFT, PANEL, RED, SURFACE, money, pct
+from .formatting import BLUE, INK, INK_SOFT, PANEL, RED, SURFACE, money, pct, signed_pct
 
 FONT = "Segoe UI"
 CHART_W = 7.7  # charts are 10 x 5.6, so height follows
@@ -82,10 +82,14 @@ class Deck:
     def chart(self, slide, path, x=0.5, y=1.65):
         slide.shapes.add_picture(str(path), Inches(x), Inches(y), width=Inches(CHART_W))
 
-    def side_panel(self, slide, heading, items):
+    def side_panel(self, slide, heading, items, so_what=None):
         self.rect(slide, 8.55, 1.75, 4.2, 4.9, PANEL)
         self.text(slide, 8.85, 1.95, 3.7, 0.4, heading, size=14, bold=True, color=INK_SOFT)
-        self.lines(slide, 8.85, 2.5, 3.7, 4.0, items, size=14, gap=12)
+        self.lines(slide, 8.85, 2.5, 3.7, 2.6, items, size=14, gap=12)
+        if so_what:
+            self.rect(slide, 8.85, 5.15, 3.6, 0.03, BLUE)
+            self.text(slide, 8.85, 5.3, 3.7, 0.35, "So what", size=14, bold=True, color=BLUE)
+            self.text(slide, 8.85, 5.68, 3.7, 0.9, so_what, size=14, bold=True)
 
     def table(self, slide, x, y, w, rows, header, col_widths, highlight=BLUE):
         shape = slide.shapes.add_table(len(rows) + 1, len(header), Inches(x), Inches(y),
@@ -120,8 +124,8 @@ def group_points(table, label_col, cur):
     cheapest = table.loc[table["cost_per_conversion"].idxmin()]
     return [
         f"Best: {best[label_col]} returns {cur}{best['roas']:.2f} per {cur}1 "
-        f"({best['roas_vs_avg']:+.1%} vs average).",
-        f"Weakest: {worst[label_col]} returns {cur}{worst['roas']:.2f} ({worst['roas_vs_avg']:+.1%}).",
+        f"({signed_pct(best['roas_vs_avg'], 1)} vs average).",
+        f"Weakest: {worst[label_col]} returns {cur}{worst['roas']:.2f} ({signed_pct(worst['roas_vs_avg'], 1)}).",
         f"Gap between best and weakest: {pct(best['roas'] / worst['roas'] - 1)}.",
         f"Lowest cost per conversion: {cheapest[label_col]} at {cur}{cheapest['cost_per_conversion']:.0f}.",
     ]
@@ -169,13 +173,15 @@ def write_pptx(data, charts, path, cfg, ai_summary=None):
     # 3. channels
     s = deck.new_slide(titles["channel"])
     deck.chart(s, charts["channel"])
-    deck.side_panel(s, "What the numbers say", group_points(data.by_channel, "channel", cur))
+    deck.side_panel(s, "What the numbers say", group_points(data.by_channel, "channel", cur),
+                    so_what=data.insights.so_what.get("channel"))
 
     # 4. segments
     if data.by_segment is not None:
         s = deck.new_slide(titles["segment"])
         deck.chart(s, charts["segment"])
-        deck.side_panel(s, "What the numbers say", group_points(data.by_segment, "segment", cur))
+        deck.side_panel(s, "What the numbers say", group_points(data.by_segment, "segment", cur),
+                        so_what=data.insights.so_what.get("segment"))
 
     # 5. top and bottom campaigns
     s = deck.new_slide(titles["campaigns"])
@@ -188,9 +194,8 @@ def write_pptx(data, charts, path, cfg, ai_summary=None):
         deck.table(s, 8.55, 2.05, 4.2, rows, ["Campaign", "Channel", "ROAS", "Lost"],
                    [1.35, 1.25, 0.7, 0.9], highlight=RED)
         deck.text(s, 8.55, 5.15, 4.2, 1.3,
-                  f"{len(action):,} campaigns fell below their channel's normal floor of about "
-                  f"{cur}{action['roas_lower_limit'].median():.2f} per {cur}1. "
-                  f"Full list in the Outliers sheet of the Excel report.",
+                  f"Each of these {len(action):,} campaigns fell below their channel's floor of "
+                  f"{data.insights.floor_text}. Full list in the Outliers sheet of the Excel report.",
                   size=12, color=INK_SOFT)
     else:
         header, widths = ["Campaign", "Channel", "ROAS"], [1.55, 1.45, 1.1]

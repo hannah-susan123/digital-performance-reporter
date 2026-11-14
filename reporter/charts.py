@@ -9,7 +9,7 @@ import matplotlib.dates as mdates  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.ticker import StrMethodFormatter  # noqa: E402
 
-from .formatting import BLUE, GREY, INK, INK_SOFT, RED, SURFACE  # noqa: E402
+from .formatting import BLUE, GREY, INK, INK_SOFT, RED, SURFACE, signed_pct  # noqa: E402
 
 
 def _c(hex_code):
@@ -80,7 +80,7 @@ def weekly_revenue(weekly, path, cur="₹"):
     ax.scatter(flagged["week"], flagged["revenue"] / 1e7, s=90, color=_c(RED),
                edgecolors=_c(SURFACE), linewidths=2, zorder=4, label="Anomaly")
     for _, row in flagged.iterrows():
-        ax.annotate(f"{row['revenue_change']:+.0%}", (row["week"], row["revenue"] / 1e7),
+        ax.annotate(signed_pct(row["revenue_change"]), (row["week"], row["revenue"] / 1e7),
                     xytext=(8, -16), textcoords="offset points", fontsize=11, color=_c(INK))
     ax.set_ylim(bottom=0)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
@@ -91,7 +91,7 @@ def weekly_revenue(weekly, path, cur="₹"):
     return _save(fig, path)
 
 
-def campaign_spread(campaigns, path, cur="₹", floor=None):
+def campaign_spread(campaigns, path, cur="₹", floor=None, floor_text=""):
     """Histogram of campaign ROAS; loss-making campaigns (ROAS < 1) in red."""
     values = campaigns["roas"].dropna()
     cap = math.ceil(values.quantile(0.99))
@@ -113,7 +113,8 @@ def campaign_spread(campaigns, path, cur="₹", floor=None):
         # campaigns left of this line are the action list
         top = ax.get_ylim()[1]
         ax.axvline(floor, color=_c(INK), linewidth=1.2, linestyle="--")
-        ax.annotate(f"Outlier floor ~{cur}{floor:.2f}: campaigns left\nof the dashed line are the action list",
+        label = floor_text or f"{cur}{floor:.2f} per {cur}1"
+        ax.annotate(f"Channel floors {label}: campaigns\nleft of the dashed line are the action list",
                     xy=(floor, top * 0.7), xytext=(6, top * 0.7), fontsize=11, color=_c(INK), va="center",
                     arrowprops={"arrowstyle": "->", "color": _c(INK_SOFT)})
     ax.set_xlabel(f"ROAS ({cur} revenue per {cur}1 spend)")
@@ -135,6 +136,7 @@ def make_charts(data, out_dir, cfg):
         "campaigns": campaign_spread(
             data.campaigns, out_dir / "campaign_roas_spread.png", cur,
             floor=data.action_list["roas_lower_limit"].median() if len(data.action_list) else None,
+            floor_text=data.insights.floor_text,
         ),
     }
     if data.by_segment is not None:

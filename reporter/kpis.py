@@ -2,6 +2,8 @@
 import numpy as np
 import pandas as pd
 
+from .formatting import signed_pct
+
 SUM_COLUMNS = ["impressions", "clicks", "conversions", "spend", "revenue"]
 
 
@@ -98,9 +100,9 @@ def weekly_trend(df: pd.DataFrame, change_threshold=0.20, partial_ratio=0.5) -> 
             return "Partial week"
         parts = []
         if abs(row["revenue_change"]) > change_threshold:
-            parts.append(f"Revenue {row['revenue_change']:+.0%} vs previous week")
+            parts.append(f"Revenue {signed_pct(row['revenue_change'])} vs previous week")
         if abs(row["roas_change"]) > change_threshold:
-            parts.append(f"ROAS {row['roas_change']:+.0%} vs previous week")
+            parts.append(f"ROAS {signed_pct(row['roas_change'])} vs previous week")
         return "; ".join(parts)
 
     t["note"] = t.apply(note, axis=1)

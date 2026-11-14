@@ -13,6 +13,10 @@ RED_FILL = "FBE3E3"
 BLUE_FILL = "E3EEFA"
 
 
+# a real minus sign (U+2212) doesn't let a line break split it from its number
+MINUS = "\u2212"
+
+
 def is_missing(value):
     return value is None or (isinstance(value, float) and math.isnan(value))
 
@@ -21,7 +25,7 @@ def money(value, symbol="₹"):
     """Short money label in Indian units: ₹2,866.1 Cr, ₹4.6 L, ₹169."""
     if is_missing(value):
         return "n/a"
-    sign = "-" if value < 0 else ""
+    sign = MINUS if value < 0 else ""
     v = abs(value)
     if v >= 1e7:
         return f"{sign}{symbol}{v / 1e7:,.1f} Cr"
@@ -44,7 +48,12 @@ def count(value):
 
 
 def pct(value, decimals=1):
-    return "n/a" if is_missing(value) else f"{value * 100:.{decimals}f}%"
+    return "n/a" if is_missing(value) else f"{value * 100:.{decimals}f}%".replace("-", MINUS)
+
+
+def signed_pct(value, decimals=0):
+    """+12% / −32%, for changes."""
+    return "n/a" if is_missing(value) else f"{value:+.{decimals}%}".replace("-", MINUS)
 
 
 def roas(value):

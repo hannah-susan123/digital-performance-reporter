@@ -3,6 +3,7 @@ import pytest
 
 from reporter import kpis
 from reporter.config import ConfigError, build_config
+from reporter.formatting import MINUS, money, pct, signed_pct
 from tests.conftest import COLUMNS
 
 
@@ -24,7 +25,7 @@ def weekly_data(revenues, per_week=10, last_week_days=7):
 def test_week_on_week_change_over_threshold_is_flagged():
     t = kpis.weekly_trend(weekly_data([1000, 1050, 700, 720]), change_threshold=0.2)
     assert t["anomaly"].tolist() == [False, False, True, False]
-    assert "Revenue -33%" in t.loc[2, "note"]
+    assert f"Revenue {MINUS}33%" in t.loc[2, "note"]  # real minus sign, never splits from the number
 
 
 def test_small_changes_are_not_flagged():
@@ -159,3 +160,9 @@ def test_action_list_is_low_return_only_biggest_loss_first():
 
 def test_log_iqr_is_the_default(cfg):
     assert cfg["outlier_method"] == "log_iqr"
+
+
+def test_negative_numbers_use_a_real_minus_sign():
+    for text in [signed_pct(-0.29), pct(-0.05), money(-250000)]:
+        assert "-" not in text and MINUS in text
+    assert signed_pct(0.12) == "+12%"

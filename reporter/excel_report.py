@@ -9,7 +9,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from .formatting import (
-    BLUE, BLUE_FILL, INK, INK_SOFT, PANEL, RED, RED_FILL, excel_formats, money, pct,
+    BLUE, BLUE_FILL, INK, INK_SOFT, PANEL, RED, RED_FILL, excel_formats,
 )
 
 HEADER_FILL = PatternFill("solid", fgColor=INK)
@@ -111,6 +111,26 @@ def group_sheet(wb, name, table, label_col, noun, overall_roas, formats):
     return ws
 
 
+def wrapped_lines(text, width_px, font_px=15):
+    """How many lines text takes in a wrapped cell, measured with the real font.
+
+    Falls back to a character estimate if Calibri isn't available.
+    """
+    try:
+        from PIL import ImageFont
+        font = ImageFont.truetype("calibri.ttf", font_px)
+    except (ImportError, OSError):
+        return max(1, -(-len(text) // int(width_px / 6.6)))
+    lines, current = 1, ""
+    for word in text.split():
+        trial = f"{current} {word}".strip()
+        if font.getlength(trial) > width_px and current:
+            lines, current = lines + 1, word
+        else:
+            current = trial
+    return lines
+
+
 def summary_sheet(wb, data, cfg, ai_summary):
     ws = wb.active
     ws.title = "Summary"
@@ -129,20 +149,25 @@ def summary_sheet(wb, data, cfg, ai_summary):
     ws["B3"] = f"{period}{o['campaigns']:,} campaigns · source: {data.source} · run {date.today():%d %b %Y}"
     ws["B3"].font = Font(color=INK_SOFT)
 
+    # (label, number, Excel format): real numbers so Excel can use them
+    crore = f'"{cur}"#,##0.0" Cr"'
     cards = [
-        ("Revenue", money(o["revenue"], cur)), ("Spend", money(o["spend"], cur)),
-        ("ROAS", f"{o['roas']:.2f}x"), ("ROI", pct(o["roi"], 0)),
-        ("Click-through rate", pct(o["ctr"], 2)), ("Conversion rate", pct(o["conversion_rate"], 1)),
-        ("Cost per click", f"{cur}{o['cpc']:,.2f}"), ("Cost per conversion", f"{cur}{o['cost_per_conversion']:,.0f}"),
+        ("Revenue", o["revenue"] / 1e7, crore), ("Spend", o["spend"] / 1e7, crore),
+        ("ROAS", o["roas"], '0.00"x"'), ("ROI", o["roi"], "0%"),
+        ("Click-through rate", o["ctr"], "0.00%"), ("Conversion rate", o["conversion_rate"], "0.0%"),
+        ("Cost per click", o["cpc"], f'"{cur}"#,##0.00'),
+        ("Cost per conversion", o["cost_per_conversion"], f'"{cur}"#,##0'),
     ]
     card_fill = PatternFill("solid", fgColor=PANEL)
-    for i, (label, value) in enumerate(cards):
+    for i, (label, value, number_format) in enumerate(cards):
         row = 5 + (i // 4) * 3
         col = 2 + (i % 4) * 2
         ws.merge_cells(start_row=row, start_column=col, end_row=row, end_column=col + 1)
         ws.merge_cells(start_row=row + 1, start_column=col, end_row=row + 1, end_column=col + 1)
         top, bottom = ws.cell(row=row, column=col), ws.cell(row=row + 1, column=col)
-        top.value, bottom.value = label, value
+        top.value, bottom.value = label, float(value)
+        bottom.number_format = number_format
+        bottom.alignment = Alignment(horizontal="left")
         top.font = Font(size=10, color=INK_SOFT)
         bottom.font = Font(size=18, bold=True, color=BLUE if label == "ROAS" else INK)
         for r in (row, row + 1):
@@ -151,6 +176,8 @@ def summary_sheet(wb, data, cfg, ai_summary):
         ws.row_dimensions[row + 1].height = 30
 
     row = 12
+    # merged B:I is 8 columns of width 15, about 110 px each, less cell padding
+    text_width_px = 8 * 110 - 10
 
     def section(title, lines, numbered=True):
         nonlocal row
@@ -158,15 +185,16 @@ def summary_sheet(wb, data, cfg, ai_summary):
         row += 1
         for i, line in enumerate(lines, start=1):
             ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=9)
-            cell = ws.cell(row=row, column=2, value=f"{i}. {line}" if numbered else line)
+            text = f"{i}. {line}" if numbered else line
+            cell = ws.cell(row=row, column=2, value=text)
             cell.alignment = Alignment(wrap_text=True, vertical="top")
-            ws.row_dimensions[row].height = 15 * (len(line) // 110 + 1) + 4
+            # same padding under every item so the gaps are even
+            ws.row_dimensions[row].height = 15 * wrapped_lines(text, text_width_px) + 6
             row += 1
         row += 1
 
     if ai_summary:
         section("Executive summary", [ai_summary], numbered=False)
-        ws.row_dimensions[row - 2].height = 15 * (len(ai_summary) // 100 + 1) + 6
     section("Key findings", data.insights.findings)
     section("Recommendations", data.insights.recommendations)
     ws.cell(row=row, column=2,

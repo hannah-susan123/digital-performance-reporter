@@ -1,7 +1,7 @@
 """Turn the KPI tables into plain-English findings, recommendations and slide titles."""
 from dataclasses import dataclass, field
 
-from .formatting import money, pct
+from .formatting import money, pct, signed_pct
 
 
 @dataclass
@@ -9,6 +9,8 @@ class Insights:
     findings: list = field(default_factory=list)
     recommendations: list = field(default_factory=list)
     titles: dict = field(default_factory=dict)
+    so_what: dict = field(default_factory=dict)
+    floor_text: str = ""  # e.g. "₹0.11–0.12 per ₹1", shared by finding, title and slide note
 
 
 def plural(n, word):
@@ -69,10 +71,11 @@ def generate_insights(data, cfg) -> Insights:
     if len(action):
         floor_lo, floor_hi = action["roas_lower_limit"].min(), action["roas_lower_limit"].max()
         floor = (f"{cur}{floor_hi:.2f}" if f"{floor_lo:.2f}" == f"{floor_hi:.2f}"
-                 else f"{cur}{floor_lo:.2f} to {cur}{floor_hi:.2f}")
+                 else f"{cur}{floor_lo:.2f}\u2013{floor_hi:.2f}")
+        out.floor_text = f"{floor} per {cur}1"
         text = (
-            f"{len(action):,} campaigns returned unusually little for their channel (below {floor} per {cur}1, "
-            f"the channel's normal floor). They spent {money(action['spend'].sum(), cur)} and brought back "
+            f"{len(action):,} campaigns fell below their channel's floor of {out.floor_text}. "
+            f"They spent {money(action['spend'].sum(), cur)} and brought back "
             f"{money(action['revenue'].sum(), cur)}: this is the action list."
         )
         if len(strong):
@@ -95,9 +98,9 @@ def generate_insights(data, cfg) -> Insights:
             volume_driven = bool((flagged["campaigns_change"].abs() > week_change).all())
             out.findings.append(
                 f"{plural(len(flagged), 'week')} moved more than {pct(week_change, 0)} week-on-week. The largest was "
-                f"a {worst_week['revenue_change']:+.0%} change in revenue in the week of "
+                f"a {signed_pct(worst_week['revenue_change'])} change in revenue in the week of "
                 f"{worst_week['week']:%d %b %Y}, when {worst_week['campaigns']:,} campaigns ran "
-                f"({worst_week['campaigns_change']:+.0%} vs the week before)."
+                f"({signed_pct(worst_week['campaigns_change'])} vs the week before)."
             )
         else:
             out.findings.append(
@@ -155,9 +158,7 @@ def generate_insights(data, cfg) -> Insights:
             if seg_gap < similar else f"{seg_best} gives the best return on spend"
         )
     if len(action):
-        t["campaigns"] = (
-            f"{len(action):,} campaigns returned under {cur}{floor_hi:.2f} per {cur}1: start with these"
-        )
+        t["campaigns"] = f"{len(action):,} campaigns fell below their channel's floor of {out.floor_text}"
     else:
         t["campaigns"] = (
             f"{pct(loss_share, 0)} of campaigns lost money, while the best returned "
@@ -183,6 +184,18 @@ def generate_insights(data, cfg) -> Insights:
         t["recommendations"] = "Fix loss-making campaigns first, then test budget shifts"
     else:
         t["recommendations"] = f"Shift budget toward {ch_best} and keep testing"
+
+    # one-line takeaway for the channel and segment slides
+    w = out.so_what
+    w["channel"] = (
+        f"Test small budget shifts rather than moving large budgets on a {pct(ch_gap)} gap."
+        if ch_gap < similar else f"Move budget toward {ch_best} in steps and check the return holds."
+    )
+    if seg_best:
+        w["segment"] = (
+            f"With segments only {pct(seg_gap)} apart, keep all of them and fix weak campaigns instead."
+            if seg_gap < similar else f"Prioritise {seg_best} in targeting, and test before cutting other segments."
+        )
 
     out.findings = out.findings[:6]
     return out
