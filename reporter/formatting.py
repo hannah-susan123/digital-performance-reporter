@@ -82,8 +82,11 @@ def excel_formats(symbol="₹"):
         "anomaly": ("Anomaly", None),
         "note": ("Note", None),
         "reason": ("Why flagged", None),
-        "roi_score": ("ROI outlier score", "0.0"),
-        "cost_per_conversion_score": ("Cost/conv outlier score", "0.0"),
+        "return_score": ("Return score", "+0.0;-0.0;0"),
+        "cost_score": ("Cost/conv score", "+0.0;-0.0;0"),
+        "roas_lower_limit": ("Channel floor (ROAS)", '0.00"x"'),
+        "loss": (f"Lost ({symbol})", cur),
+        "outlier_type": ("Outlier type", None),
         "roi_reported": ("ROI (reported)", "0.00"),
         "quality_flag": ("Quality flag", None),
     }

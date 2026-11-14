@@ -63,14 +63,26 @@ def generate_insights(data, cfg) -> Insights:
         f"and brought back {money(losers['revenue'].sum(), cur)}."
     )
 
-    # 4. outliers
-    if len(data.outliers):
-        top = data.outliers.sort_values("roi", ascending=False).iloc[0]
+    # 4. outliers: low-return ones are the action list
+    action = data.action_list
+    strong = data.outliers[data.outliers["outlier_type"] == "High return"] if len(data.outliers) else data.outliers
+    if len(action):
+        floor_lo, floor_hi = action["roas_lower_limit"].min(), action["roas_lower_limit"].max()
+        floor = (f"{cur}{floor_hi:.2f}" if f"{floor_lo:.2f}" == f"{floor_hi:.2f}"
+                 else f"{cur}{floor_lo:.2f} to {cur}{floor_hi:.2f}")
+        text = (
+            f"{len(action):,} campaigns returned unusually little for their channel (below {floor} per {cur}1, "
+            f"the channel's normal floor). They spent {money(action['spend'].sum(), cur)} and brought back "
+            f"{money(action['revenue'].sum(), cur)}: this is the action list."
+        )
+        if len(strong):
+            best = strong.loc[strong["roas"].idxmax()]
+            text += (f" At the other end, {len(strong):,} campaigns did unusually well, "
+                     f"led by {best['campaign']} at {cur}{best['roas']:.0f} per {cur}1.")
+        out.findings.append(text)
+    elif len(data.outliers):
         out.findings.append(
-            f"{len(data.outliers):,} campaigns ({pct(len(data.outliers) / len(c), 0)}) are outliers for their "
-            f"channel on ROI or cost per conversion. The strongest, "
-            f"{top['campaign']} ({top['channel']}), returned {cur}{top['roas']:.0f} per {cur}1 "
-            f"at a cost per conversion of {cur}{top['cost_per_conversion']:.0f}."
+            f"{len(data.outliers):,} campaigns are outliers for their channel, but none for unusually low return."
         )
 
     # 5. weekly anomalies, or duration if there are no dates
@@ -99,10 +111,17 @@ def generate_insights(data, cfg) -> Insights:
         )
 
     # recommendations
-    out.recommendations.append(
-        f"Review the {len(losers):,} loss-making campaigns first: together they spent "
-        f"{money(losers['spend'].sum() - losers['revenue'].sum(), cur)} more than they earned back."
-    )
+    if len(action):
+        out.recommendations.append(
+            f"Start with the {len(action):,} campaigns on the action list (Outliers sheet), biggest loss first: "
+            f"they lost {money(action['loss'].sum(), cur)} between them. Pause or fix them, then work through "
+            f"the other {len(losers) - len(action):,} loss-making campaigns."
+        )
+    else:
+        out.recommendations.append(
+            f"Review the {len(losers):,} loss-making campaigns first: together they spent "
+            f"{money(losers['spend'].sum() - losers['revenue'].sum(), cur)} more than they earned back."
+        )
     target = ch_best + (f" and the {seg_best} segment" if seg_best else "")
     if ch_gap < similar:
         out.recommendations.append(
@@ -111,9 +130,10 @@ def generate_insights(data, cfg) -> Insights:
         )
     else:
         out.recommendations.append(f"Shift budget toward {target}, then track whether the return holds.")
-    if len(data.outliers):
+    if len(strong):
         out.recommendations.append(
-            "Study the top outlier campaigns (targeting, creative, cost per conversion) and reuse what works."
+            f"Study the {len(strong):,} unusually strong campaigns (targeting, creative, cost per conversion) "
+            "and reuse what works."
         )
     out.recommendations.append(
         f"Run this report every week so swings over {pct(week_change, 0)} are spotted within days."
@@ -134,10 +154,15 @@ def generate_insights(data, cfg) -> Insights:
             f"{seg_best} is the strongest segment, by a narrow {pct(seg_gap)}"
             if seg_gap < similar else f"{seg_best} gives the best return on spend"
         )
-    t["campaigns"] = (
-        f"{pct(loss_share, 0)} of campaigns lost money, while the best returned "
-        f"{cur}{c['roas'].max():.0f} per {cur}1"
-    )
+    if len(action):
+        t["campaigns"] = (
+            f"{len(action):,} campaigns returned under {cur}{floor_hi:.2f} per {cur}1: start with these"
+        )
+    else:
+        t["campaigns"] = (
+            f"{pct(loss_share, 0)} of campaigns lost money, while the best returned "
+            f"{cur}{c['roas'].max():.0f} per {cur}1"
+        )
     if flagged is not None:
         if not len(flagged):
             t["weekly"] = "Weekly performance held steady across the period"
@@ -152,10 +177,12 @@ def generate_insights(data, cfg) -> Insights:
         "The bigger gains are inside channels, not between them"
         if ch_gap < similar else f"{ch_best} and strong campaigns drive the return"
     )
-    t["recommendations"] = (
-        "Fix loss-making campaigns first, then test budget shifts"
-        if loss_share > 0.1 else f"Shift budget toward {ch_best} and keep testing"
-    )
+    if len(action):
+        t["recommendations"] = f"Fix the {len(action):,} weakest campaigns first, then test budget shifts"
+    elif loss_share > 0.1:
+        t["recommendations"] = "Fix loss-making campaigns first, then test budget shifts"
+    else:
+        t["recommendations"] = f"Shift budget toward {ch_best} and keep testing"
 
     out.findings = out.findings[:6]
     return out

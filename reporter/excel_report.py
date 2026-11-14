@@ -207,6 +207,44 @@ def weekly_sheet(wb, weekly, formats, threshold):
     ws.add_chart(chart, f"B{last + 4}")
 
 
+def outliers_sheet(wb, data, cfg, formats):
+    """Action list (low-return outliers, biggest loss first), then the other outliers."""
+    ws = wb.create_sheet("Outliers")
+    th = cfg["thresholds"]
+    method = cfg["outlier_method"]
+    if method == "log_iqr":
+        how = (f"Log IQR method: within each channel, flagged when log(ROAS) or log(cost per conversion) is more "
+               f"than {th['iqr_multiplier']:g}x the interquartile range beyond Q1/Q3.")
+    elif method == "iqr":
+        how = (f"IQR method: within each channel, flagged when ROI or cost per conversion is more than "
+               f"{th['iqr_multiplier']:g}x the interquartile range beyond Q1/Q3.")
+    else:
+        how = (f"Z-score method: within each channel, flagged when more than {th['outlier_z']:g} "
+               "standard deviations from the mean.")
+    ws["A1"] = how + " Score = how far past the limit, in IQRs (or std devs). Channel floor = lowest normal ROAS."
+    ws["A1"].font = Font(italic=True, color=INK_SOFT)
+
+    action = data.action_list
+    ws["A3"] = f"Action list: {len(action):,} campaigns with unusually low return, biggest loss first"
+    ws["A3"].font = Font(size=13, bold=True, color=RED)
+    cols = ["campaign", "channel", "segment", "spend", "revenue", "loss", "roas", "roas_lower_limit",
+            "cost_per_conversion", "return_score", "reason"]
+    header, last, letters = write_table(ws, action, cols, formats, start_row=4, autofilter=False)
+    if len(action):
+        highlight_below(ws, letters["return_score"], header + 1, last, 0)
+    first_freeze = ws.freeze_panes
+
+    others = data.outliers[data.outliers["outlier_type"] != "Low return"] if len(data.outliers) else data.outliers
+    start = last + 3
+    title = f"Other outliers: {len(others):,} (unusually high return or unusual cost per conversion)"
+    ws.cell(row=start - 1, column=1, value=title).font = Font(size=13, bold=True, color=INK)
+    cols = ["campaign", "channel", "segment", "spend", "revenue", "outlier_type", "roas",
+            "cost_per_conversion", "return_score", "cost_score", "reason"]
+    write_table(ws, others, cols, formats, start_row=start, autofilter=False)
+    ws.freeze_panes = first_freeze
+    ws.column_dimensions["K"].width = 70
+
+
 def write_excel(data, path, cfg, ai_summary=None):
     formats = excel_formats(cfg["currency"])
     avg = data.overall["roas"]
@@ -235,21 +273,7 @@ def write_excel(data, path, cfg, ai_summary=None):
     highlight_below(ws, letters["roi"], 3, last, 0)
     ws.freeze_panes = "B3"
 
-    ws = wb.create_sheet("Outliers")
-    cols = ["campaign", "channel", "segment", "spend", "revenue", "roas", "roi",
-            "cost_per_conversion", "roi_score", "cost_per_conversion_score", "reason"]
-    header, last, letters = write_table(ws, data.outliers, cols, formats, start_row=3)
-    highlight_below(ws, letters["roi"], header + 1, last, 0)
-    ws.column_dimensions[letters["reason"]].width = 60
-    if cfg["outlier_method"] == "iqr":
-        how = (f"IQR method: flagged when ROI or cost per conversion is more than "
-               f"{cfg['thresholds']['iqr_multiplier']:g}x the interquartile range beyond Q1/Q3 of its channel. "
-               "Score = IQRs past that limit.")
-    else:
-        how = (f"Z-score method: flagged when more than {cfg['thresholds']['outlier_z']:g} standard deviations "
-               "from the channel mean. Score = standard deviations from the mean.")
-    ws["A1"] = how
-    ws["A1"].font = Font(italic=True, color=INK_SOFT)
+    outliers_sheet(wb, data, cfg, formats)
 
     if data.weekly is not None:
         weekly_sheet(wb, data.weekly, formats, cfg["thresholds"]["week_change"])

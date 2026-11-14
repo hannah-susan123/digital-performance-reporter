@@ -91,7 +91,7 @@ def weekly_revenue(weekly, path, cur="₹"):
     return _save(fig, path)
 
 
-def campaign_spread(campaigns, path, cur="₹"):
+def campaign_spread(campaigns, path, cur="₹", floor=None):
     """Histogram of campaign ROAS; loss-making campaigns (ROAS < 1) in red."""
     values = campaigns["roas"].dropna()
     cap = math.ceil(values.quantile(0.99))
@@ -109,6 +109,13 @@ def campaign_spread(campaigns, path, cur="₹"):
             patch.set_facecolor(_c(RED))
     ax.axvline(1, color=_c(INK), linewidth=1.2)
     ax.text(1.15, ax.get_ylim()[1] * 0.92, "Break-even", fontsize=11, color=_c(INK))
+    if floor:
+        # campaigns left of this line are the action list
+        top = ax.get_ylim()[1]
+        ax.axvline(floor, color=_c(INK), linewidth=1.2, linestyle="--")
+        ax.annotate(f"Outlier floor ~{cur}{floor:.2f}: campaigns left\nof the dashed line are the action list",
+                    xy=(floor, top * 0.7), xytext=(6, top * 0.7), fontsize=11, color=_c(INK), va="center",
+                    arrowprops={"arrowstyle": "->", "color": _c(INK_SOFT)})
     ax.set_xlabel(f"ROAS ({cur} revenue per {cur}1 spend)")
     ax.set_ylabel("Campaigns")
     ax.yaxis.set_major_formatter(StrMethodFormatter("{x:,.0f}"))
@@ -125,7 +132,10 @@ def make_charts(data, out_dir, cfg):
     avg = data.overall["roas"]
     paths = {
         "channel": roas_bar(data.by_channel, "channel", "channel", avg, out_dir / "roas_by_channel.png", cur),
-        "campaigns": campaign_spread(data.campaigns, out_dir / "campaign_roas_spread.png", cur),
+        "campaigns": campaign_spread(
+            data.campaigns, out_dir / "campaign_roas_spread.png", cur,
+            floor=data.action_list["roas_lower_limit"].median() if len(data.action_list) else None,
+        ),
     }
     if data.by_segment is not None:
         paths["segment"] = roas_bar(data.by_segment, "segment", "customer segment", avg,

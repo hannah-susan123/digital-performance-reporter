@@ -180,14 +180,26 @@ def write_pptx(data, charts, path, cfg, ai_summary=None):
     # 5. top and bottom campaigns
     s = deck.new_slide(titles["campaigns"])
     deck.chart(s, charts["campaigns"], x=0.4)
-    header = ["Campaign", "Channel", "ROAS"]
-    widths = [1.55, 1.45, 1.1]
-    top = [[r.campaign, r.channel, f"{cur}{r.roas:.1f}"] for r in data.top.head(5).itertuples()]
-    bottom = [[r.campaign, r.channel, f"{cur}{r.roas:.2f}"] for r in data.bottom.head(5).itertuples()]
-    deck.text(s, 8.55, 1.7, 4.1, 0.35, "Top 5 campaigns", size=13, bold=True, color=BLUE)
-    deck.table(s, 8.55, 2.05, 4.1, top, header, widths)
-    deck.text(s, 8.55, 4.2, 4.1, 0.35, "Bottom 5 campaigns", size=13, bold=True, color=RED)
-    deck.table(s, 8.55, 4.55, 4.1, bottom, header, widths, highlight=RED)
+    action = data.action_list
+    if len(action):
+        rows = [[r.campaign, r.channel, f"{cur}{r.roas:.2f}", f"{cur}{r.loss:,.0f}"]
+                for r in action.head(8).itertuples()]
+        deck.text(s, 8.55, 1.7, 4.2, 0.35, "Action list: biggest losses", size=13, bold=True, color=RED)
+        deck.table(s, 8.55, 2.05, 4.2, rows, ["Campaign", "Channel", "ROAS", "Lost"],
+                   [1.35, 1.25, 0.7, 0.9], highlight=RED)
+        deck.text(s, 8.55, 5.15, 4.2, 1.3,
+                  f"{len(action):,} campaigns fell below their channel's normal floor of about "
+                  f"{cur}{action['roas_lower_limit'].median():.2f} per {cur}1. "
+                  f"Full list in the Outliers sheet of the Excel report.",
+                  size=12, color=INK_SOFT)
+    else:
+        header, widths = ["Campaign", "Channel", "ROAS"], [1.55, 1.45, 1.1]
+        top = [[r.campaign, r.channel, f"{cur}{r.roas:.1f}"] for r in data.top.head(5).itertuples()]
+        bottom = [[r.campaign, r.channel, f"{cur}{r.roas:.2f}"] for r in data.bottom.head(5).itertuples()]
+        deck.text(s, 8.55, 1.7, 4.1, 0.35, "Top 5 campaigns", size=13, bold=True, color=BLUE)
+        deck.table(s, 8.55, 2.05, 4.1, top, header, widths)
+        deck.text(s, 8.55, 4.2, 4.1, 0.35, "Bottom 5 campaigns", size=13, bold=True, color=RED)
+        deck.table(s, 8.55, 4.55, 4.1, bottom, header, widths, highlight=RED)
 
     # 6. weekly trend
     if data.weekly is not None:
