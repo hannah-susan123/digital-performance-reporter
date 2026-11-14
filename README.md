@@ -19,7 +19,7 @@ This tool automates that whole loop. The data goes in, a consistent report comes
 | **Config** | `config.yaml` maps the dataset's column names to standard names. A different dataset only needs a new mapping, no code changes. |
 | **Clean** | Checks for missing values, duplicates and impossible values (clicks > impressions, negative spend, conversion rate outside 0-100%, conversions > clicks). Bad rows are removed or flagged, and the reported ROI is cross-checked against revenue and spend. Prints a data-quality summary. |
 | **KPIs** | CTR, conversion rate, cost per click, cost per conversion, revenue, ROI and ROAS, broken down by channel, customer segment, campaign length, platform and campaign. Group figures come from totals, not averages of ratios. |
-| **Anomalies** | Weekly trend with week-on-week moves above 20% flagged (partial weeks are excluded). Campaigns more than 3 standard deviations from their channel's average ROI or cost per conversion are flagged as outliers. |
+| **Anomalies** | Weekly trend with week-on-week moves above 20% flagged (partial weeks are excluded). Campaigns with unusual ROI or cost per conversion for their channel are flagged as outliers, using either the IQR rule (default) or z-scores, set in `config.yaml`. |
 | **Insights** | 4-6 plain-English findings and recommendations, written by simple rules from the KPI tables. If the gap between the best and worst group is under 5%, the wording says so instead of overselling a winner. |
 | **AI summary (optional)** | `--ai` sends the findings to Gemini for a short executive summary. The report works fully without it. |
 | **Outputs** | Excel report with KPI cards, native charts, number formatting and red highlighting for weak performers; 8-slide PowerPoint where every title states the finding; PNG charts for a website. |
@@ -49,7 +49,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Download the dataset (see [Dataset](#dataset)) and put `nykaa_campaign_data.csv` in `data/raw/`, then:
+The dataset is included in `data/raw/` (see [Dataset](#dataset)), so you can run the report straight away:
 
 ```bash
 python run_report.py --input data/raw/nykaa_campaign_data.csv
@@ -143,14 +143,26 @@ tests/                 pytest tests for cleaning, KPIs, anomalies and a full run
 - `Acquisition_Cost` in this dataset is the cost **per conversion**, so total spend is `Acquisition_Cost × Conversions`. This reproduces the dataset's own ROI column exactly, which the cleaning step checks on every row.
 - "Channel" is `Campaign_Type` (Email, Influencer, Paid Ads, SEO, Social Media). `Channel_Used` lists the platforms a campaign ran on, often several, so the platform breakdown counts a campaign once per platform and its totals overlap.
 - The data ends on 24 June 2025, so the last weeks are partial and are left out of anomaly alerts.
-- The dataset is simulated, so the findings illustrate the method rather than real Nykaa performance.
+- It appears to be a synthetic sample dataset, not real company results: groups are almost exactly equal in size and performance. The findings illustrate the method rather than real Nykaa performance.
+
+### Choosing an outlier method
+
+ROI here is heavily right-skewed: most campaigns sit between -100% and +400%, with a long tail up to +7,400%. The two methods behave differently on that shape:
+
+| Method | Setting | Flagged on this dataset |
+|---|---|---|
+| IQR, 1.5× (default) | `outlier_method: "iqr"` | 8,928 campaigns (16.1%) |
+| IQR, 3× | `iqr_multiplier: 3.0` | 3,854 (6.9%) |
+| Z-score, 3 std devs | `outlier_method: "zscore"` | 2,271 (4.1%) |
+
+The IQR rule is robust in the sense that extreme values can't hide themselves by inflating the standard deviation (there is a test for exactly this). But its fences are symmetric, so on a long right tail it flags a lot of the tail. All flags in this dataset are on the high side: unusually high ROI or unusually high cost per conversion.
 
 ## Dataset
 
-**Nykaa Marketing Campaign Performance Dataset** by nalisha on Kaggle:
-https://www.kaggle.com/datasets/nalisha/nykaa-marketing-campaign-performance-dataset
+**Nykaa Marketing Campaign Performance Dataset** by Ishita Bahamnia on Kaggle:
+https://www.kaggle.com/datasets/ishitabahamnia/nykaa-campaign-data-csv
 
-The CSV is not included in this repository. Download it from Kaggle and place it in `data/raw/`.
+Licence: CC0: Public Domain. The CSV is included in `data/raw/` so the repository runs as soon as it's cloned.
 
 ## Next steps
 
