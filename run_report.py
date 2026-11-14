@@ -65,7 +65,7 @@ def main(argv=None):
           f"ROAS {o['roas']:.2f}x, ROI {pct(o['roi'], 0)}, CTR {pct(o['ctr'], 2)}")
     if data.weekly is not None:
         print(f"  Weekly trend: {len(data.weekly)} weeks, {int(data.weekly['anomaly'].sum())} flagged")
-    print(f"  Outlier campaigns: {len(data.outliers):,}")
+    print(f"  Outlier campaigns ({cfg['outlier_method']}): {len(data.outliers):,}")
 
     print("[4/5] Findings")
     for i, finding in enumerate(data.insights.findings, 1):

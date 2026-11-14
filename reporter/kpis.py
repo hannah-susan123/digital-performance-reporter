@@ -107,25 +107,66 @@ def weekly_trend(df: pd.DataFrame, change_threshold=0.20, partial_ratio=0.5) -> 
     return t.reset_index(drop=True)
 
 
-def campaign_outliers(campaigns: pd.DataFrame, z_threshold=3.0) -> pd.DataFrame:
-    """Campaigns whose ROI or cost per conversion is far from their channel's average."""
+OUTLIER_METHODS = ("iqr", "zscore")
+OUTLIER_METRICS = {"roi": "ROI", "cost_per_conversion": "Cost per conversion"}
+
+
+def _zscore_scores(values, groups, z_threshold):
+    """Standard deviations from the channel mean; flagged beyond +/- z_threshold."""
+    mean = groups.transform("mean")
+    std = groups.transform("std")
+    score = safe_divide(values - mean, std)
+    return score, score.abs() > z_threshold
+
+
+def _iqr_scores(values, groups, multiplier):
+    """Flag values beyond Q1 - k*IQR or Q3 + k*IQR within the channel.
+
+    Score is how many IQRs past the fence the value sits (0 if inside).
+    """
+    q1 = groups.transform(lambda s: s.quantile(0.25))
+    q3 = groups.transform(lambda s: s.quantile(0.75))
+    iqr = q3 - q1
+    low, high = q1 - multiplier * iqr, q3 + multiplier * iqr
+    flagged = (values < low) | (values > high)
+    # positive above the upper fence, negative below the lower one, 0 inside
+    past_fence = (values - high).clip(lower=0) - (low - values).clip(lower=0)
+    return safe_divide(past_fence, iqr), flagged
+
+
+def campaign_outliers(campaigns: pd.DataFrame, method="iqr", z_threshold=3.0,
+                      iqr_multiplier=1.5) -> pd.DataFrame:
+    """Campaigns whose ROI or cost per conversion is unusual for their channel.
+
+    method="iqr" suits skewed metrics like ROI; "zscore" assumes a roughly
+    symmetric spread and over-flags the long tail.
+    """
+    if method not in OUTLIER_METHODS:
+        raise ValueError(f"outlier_method must be one of {OUTLIER_METHODS}, got {method!r}")
     c = campaigns.copy()
-    groups = c.groupby("channel")
-    for metric in ["roi", "cost_per_conversion"]:
-        mean = groups[metric].transform("mean")
-        std = groups[metric].transform("std")
-        c[f"{metric}_z"] = safe_divide(c[metric] - mean, std)
+    flags = []
+    for metric in OUTLIER_METRICS:
+        groups = c.groupby("channel")[metric]
+        if method == "iqr":
+            score, flag = _iqr_scores(c[metric], groups, iqr_multiplier)
+        else:
+            score, flag = _zscore_scores(c[metric], groups, z_threshold)
+        c[f"{metric}_score"] = score
+        c[f"{metric}_flag"] = flag
+        flags.append(flag)
+
+    rule = f"more than {z_threshold:g} std devs" if method == "zscore" else f"beyond {iqr_multiplier:g}x IQR"
 
     def reason(row):
         parts = []
-        if abs(row["roi_z"]) > z_threshold:
-            parts.append("ROI far " + ("above" if row["roi_z"] > 0 else "below") + " channel average")
-        if abs(row["cost_per_conversion_z"]) > z_threshold:
-            side = "above" if row["cost_per_conversion_z"] > 0 else "below"
-            parts.append(f"Cost per conversion far {side} channel average")
+        for metric, label in OUTLIER_METRICS.items():
+            if row[f"{metric}_flag"]:
+                side = "above" if row[f"{metric}_score"] > 0 else "below"
+                parts.append(f"{label} {side} channel norm ({rule})")
         return "; ".join(parts)
 
-    flagged = c[(c["roi_z"].abs() > z_threshold) | (c["cost_per_conversion_z"].abs() > z_threshold)].copy()
+    flagged = c[flags[0] | flags[1]].copy()
     flagged["reason"] = flagged.apply(reason, axis=1) if len(flagged) else pd.Series(dtype=str)
-    flagged["max_z"] = flagged[["roi_z", "cost_per_conversion_z"]].abs().max(axis=1)
-    return flagged.sort_values("max_z", ascending=False).reset_index(drop=True)
+    flagged["max_score"] = flagged[["roi_score", "cost_per_conversion_score"]].abs().max(axis=1)
+    flagged = flagged.drop(columns=[f"{m}_flag" for m in OUTLIER_METRICS])
+    return flagged.sort_values("max_score", ascending=False).reset_index(drop=True)

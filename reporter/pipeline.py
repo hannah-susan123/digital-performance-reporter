@@ -56,7 +56,9 @@ def build_report(raw: pd.DataFrame, cfg, source="data") -> ReportData:
         ),
         weekly=kpis.weekly_trend(campaigns, th["week_change"], th["partial_week_ratio"]) if dated else None,
         # outlier check runs either way; with no dates it's the main anomaly check
-        outliers=kpis.campaign_outliers(campaigns, th["outlier_z"]),
+        outliers=kpis.campaign_outliers(
+            campaigns, cfg["outlier_method"], th["outlier_z"], th["iqr_multiplier"]
+        ),
         top=campaigns.nlargest(n, "roi"),
         bottom=campaigns.nsmallest(n, "roi"),
         date_range=(campaigns["date"].min(), campaigns["date"].max()) if dated else None,

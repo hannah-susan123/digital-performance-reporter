@@ -237,10 +237,19 @@ def write_excel(data, path, cfg, ai_summary=None):
 
     ws = wb.create_sheet("Outliers")
     cols = ["campaign", "channel", "segment", "spend", "revenue", "roas", "roi",
-            "cost_per_conversion", "roi_z", "cost_per_conversion_z", "reason"]
-    header, last, letters = write_table(ws, data.outliers, cols, formats)
+            "cost_per_conversion", "roi_score", "cost_per_conversion_score", "reason"]
+    header, last, letters = write_table(ws, data.outliers, cols, formats, start_row=3)
     highlight_below(ws, letters["roi"], header + 1, last, 0)
-    ws.column_dimensions[letters["reason"]].width = 50
+    ws.column_dimensions[letters["reason"]].width = 60
+    if cfg["outlier_method"] == "iqr":
+        how = (f"IQR method: flagged when ROI or cost per conversion is more than "
+               f"{cfg['thresholds']['iqr_multiplier']:g}x the interquartile range beyond Q1/Q3 of its channel. "
+               "Score = IQRs past that limit.")
+    else:
+        how = (f"Z-score method: flagged when more than {cfg['thresholds']['outlier_z']:g} standard deviations "
+               "from the channel mean. Score = standard deviations from the mean.")
+    ws["A1"] = how
+    ws["A1"].font = Font(italic=True, color=INK_SOFT)
 
     if data.weekly is not None:
         weekly_sheet(wb, data.weekly, formats, cfg["thresholds"]["week_change"])

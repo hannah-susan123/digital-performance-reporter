@@ -67,7 +67,8 @@ def generate_insights(data, cfg) -> Insights:
     if len(data.outliers):
         top = data.outliers.sort_values("roi", ascending=False).iloc[0]
         out.findings.append(
-            f"{len(data.outliers):,} campaigns sit far from their channel's average. The strongest, "
+            f"{len(data.outliers):,} campaigns ({pct(len(data.outliers) / len(c), 0)}) are outliers for their "
+            f"channel on ROI or cost per conversion. The strongest, "
             f"{top['campaign']} ({top['channel']}), returned {cur}{top['roas']:.0f} per {cur}1 "
             f"at a cost per conversion of {cur}{top['cost_per_conversion']:.0f}."
         )

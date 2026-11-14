@@ -21,6 +21,11 @@ date_format: "%d-%m-%Y"
 platform_separator: ","
 currency: "₹"
 
+# how to spot unusual campaigns within each channel:
+#   iqr    - beyond 1.5x the interquartile range (robust to skewed data like ROI)
+#   zscore - more than outlier_z standard deviations from the channel mean
+outlier_method: "iqr"
+
 duration_bands:
   edges: [0, 7, 14, 21, .inf]
   labels: ["1-7 days", "8-14 days", "15-21 days", "22+ days"]
@@ -28,7 +33,8 @@ duration_bands:
 thresholds:
   week_change: 0.20        # flag week-on-week moves bigger than this
   partial_week_ratio: 0.5  # weeks with fewer campaigns than this x median are partial
-  outlier_z: 3.0           # standard deviations from channel average
+  outlier_z: 3.0           # zscore method: standard deviations from channel average
+  iqr_multiplier: 1.5      # iqr method: how many IQRs past Q1/Q3 counts as an outlier
   similar_gap: 0.05        # best vs worst gap below this counts as "close"
   roi_tolerance: 0.05      # allowed difference between reported and calculated ROI
 
