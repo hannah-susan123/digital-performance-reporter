@@ -25,17 +25,20 @@ This tool automates that whole loop. The data goes in, a consistent report comes
 | **Outputs** | Excel report with KPI cards, native charts, number formatting and red highlighting for weak performers; 8-slide PowerPoint where every title states the finding; PNG charts for a website. |
 
 ```mermaid
-flowchart LR
-    A[Raw campaign CSV] --> B[Clean and<br/>quality checks]
-    B --> C[KPIs and<br/>breakdowns]
-    C --> D[Anomalies and<br/>outliers]
-    D --> E[Findings and<br/>recommendations]
-    E -. optional --ai .-> F[Gemini<br/>executive summary]
-    E --> G[Excel report]
-    E --> H[PowerPoint deck]
-    E --> I[PNG charts]
-    F -.-> G
-    F -.-> H
+flowchart TD
+    A[Raw campaign CSV] --> B[Clean and quality checks]
+    B --> C[KPIs and breakdowns]
+    C --> D[Anomalies and outliers]
+    D --> E[Findings and recommendations]
+    E -. optional --ai .-> F[Gemini executive summary]
+    E --> OUT
+    F -.-> OUT
+    subgraph OUT[Outputs]
+        direction LR
+        G[Excel report]
+        H[PowerPoint deck]
+        I[PNG charts]
+    end
 ```
 
 ## How to run it
