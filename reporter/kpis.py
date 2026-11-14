@@ -107,66 +107,87 @@ def weekly_trend(df: pd.DataFrame, change_threshold=0.20, partial_ratio=0.5) -> 
     return t.reset_index(drop=True)
 
 
-OUTLIER_METHODS = ("iqr", "zscore")
-OUTLIER_METRICS = {"roi": "ROI", "cost_per_conversion": "Cost per conversion"}
+OUTLIER_METHODS = ("log_iqr", "iqr", "zscore")
+MIN_ROAS = 0.001  # log(0) is undefined, so zero-revenue campaigns count as ROAS 0.001
 
 
-def _zscore_scores(values, groups, z_threshold):
-    """Standard deviations from the channel mean; flagged beyond +/- z_threshold."""
-    mean = groups.transform("mean")
-    std = groups.transform("std")
-    score = safe_divide(values - mean, std)
-    return score, score.abs() > z_threshold
+def _limits(values, channel, method, z_threshold, iqr_multiplier):
+    """Lower and upper limit for each row, from its own channel's spread.
 
-
-def _iqr_scores(values, groups, multiplier):
-    """Flag values beyond Q1 - k*IQR or Q3 + k*IQR within the channel.
-
-    Score is how many IQRs past the fence the value sits (0 if inside).
+    Returns (low, high, score). The score is how far past the nearest limit a
+    value sits, in units of the spread (IQR or std dev): negative below, positive
+    above, 0 inside.
     """
-    q1 = groups.transform(lambda s: s.quantile(0.25))
-    q3 = groups.transform(lambda s: s.quantile(0.75))
-    iqr = q3 - q1
-    low, high = q1 - multiplier * iqr, q3 + multiplier * iqr
-    flagged = (values < low) | (values > high)
-    # positive above the upper fence, negative below the lower one, 0 inside
-    past_fence = (values - high).clip(lower=0) - (low - values).clip(lower=0)
-    return safe_divide(past_fence, iqr), flagged
+    groups = values.groupby(channel)
+    if method == "zscore":
+        mean, spread = groups.transform("mean"), groups.transform("std")
+        low, high = mean - z_threshold * spread, mean + z_threshold * spread
+    else:
+        q1 = groups.transform(lambda s: s.quantile(0.25))
+        q3 = groups.transform(lambda s: s.quantile(0.75))
+        spread = q3 - q1
+        low, high = q1 - iqr_multiplier * spread, q3 + iqr_multiplier * spread
+    past_limit = (values - high).clip(lower=0) - (low - values).clip(lower=0)
+    return low, high, safe_divide(past_limit, spread).fillna(0)
 
 
-def campaign_outliers(campaigns: pd.DataFrame, method="iqr", z_threshold=3.0,
+def campaign_outliers(campaigns: pd.DataFrame, method="log_iqr", z_threshold=3.0,
                       iqr_multiplier=1.5) -> pd.DataFrame:
-    """Campaigns whose ROI or cost per conversion is unusual for their channel.
+    """Campaigns whose return or cost per conversion is unusual for their channel.
 
-    method="iqr" suits skewed metrics like ROI; "zscore" assumes a roughly
-    symmetric spread and over-flags the long tail.
+    log_iqr: IQR rule on log(ROAS) and log(cost per conversion). Both are
+             positive and right-skewed; on a log scale they're roughly symmetric,
+             so the fences catch unusually low returns as well as high ones.
+    iqr:     IQR rule on ROI and cost per conversion as they are.
+    zscore:  more than z_threshold std devs from the channel mean.
     """
     if method not in OUTLIER_METHODS:
         raise ValueError(f"outlier_method must be one of {OUTLIER_METHODS}, got {method!r}")
     c = campaigns.copy()
-    flags = []
-    for metric in OUTLIER_METRICS:
-        groups = c.groupby("channel")[metric]
-        if method == "iqr":
-            score, flag = _iqr_scores(c[metric], groups, iqr_multiplier)
-        else:
-            score, flag = _zscore_scores(c[metric], groups, z_threshold)
-        c[f"{metric}_score"] = score
-        c[f"{metric}_flag"] = flag
-        flags.append(flag)
 
-    rule = f"more than {z_threshold:g} std devs" if method == "zscore" else f"beyond {iqr_multiplier:g}x IQR"
+    if method == "log_iqr":
+        ret = np.log(c["roas"].clip(lower=MIN_ROAS))
+        cost = np.log(c["cost_per_conversion"].where(c["cost_per_conversion"] > 0))
+        ret_label, rule = "Return (ROAS)", f"beyond {iqr_multiplier:g}x IQR on log scale"
+    else:
+        ret, cost = c["roi"], c["cost_per_conversion"]
+        ret_label = "ROI"
+        rule = f"beyond {iqr_multiplier:g}x IQR" if method == "iqr" else f"more than {z_threshold:g} std devs"
+
+    ret_low, _, c["return_score"] = _limits(ret, c["channel"], method, z_threshold, iqr_multiplier)
+    _, _, c["cost_score"] = _limits(cost, c["channel"], method, z_threshold, iqr_multiplier)
+
+    # the channel's lower return limit, always shown as ROAS so every method reads the same
+    c["roas_lower_limit"] = np.exp(ret_low) if method == "log_iqr" else ret_low + 1
+    c["loss"] = c["spend"] - c["revenue"]
 
     def reason(row):
         parts = []
-        for metric, label in OUTLIER_METRICS.items():
-            if row[f"{metric}_flag"]:
-                side = "above" if row[f"{metric}_score"] > 0 else "below"
-                parts.append(f"{label} {side} channel norm ({rule})")
+        for score, label in [(row["return_score"], ret_label), (row["cost_score"], "Cost per conversion")]:
+            if score:
+                parts.append(f"{label} {'above' if score > 0 else 'below'} channel norm ({rule})")
         return "; ".join(parts)
 
-    flagged = c[flags[0] | flags[1]].copy()
-    flagged["reason"] = flagged.apply(reason, axis=1) if len(flagged) else pd.Series(dtype=str)
-    flagged["max_score"] = flagged[["roi_score", "cost_per_conversion_score"]].abs().max(axis=1)
-    flagged = flagged.drop(columns=[f"{m}_flag" for m in OUTLIER_METRICS])
-    return flagged.sort_values("max_score", ascending=False).reset_index(drop=True)
+    def outlier_type(row):
+        if row["return_score"] < 0:
+            return "Low return"
+        if row["return_score"] > 0:
+            return "High return"
+        return "High cost per conversion" if row["cost_score"] > 0 else "Low cost per conversion"
+
+    flagged = c[(c["return_score"] != 0) | (c["cost_score"] != 0)].copy()
+    if flagged.empty:
+        return flagged.assign(reason=pd.Series(dtype=str), outlier_type=pd.Series(dtype=str))
+    flagged["reason"] = flagged.apply(reason, axis=1)
+    flagged["outlier_type"] = flagged.apply(outlier_type, axis=1)
+    # low-return campaigns first (biggest loss first): they're the action list
+    flagged["_order"] = (flagged["outlier_type"] != "Low return").astype(int)
+    flagged = flagged.sort_values(["_order", "loss"], ascending=[True, False])
+    return flagged.drop(columns="_order").reset_index(drop=True)
+
+
+def action_list(outliers: pd.DataFrame) -> pd.DataFrame:
+    """Low-return outliers, biggest loss first."""
+    if outliers.empty:
+        return outliers
+    return outliers[outliers["outlier_type"] == "Low return"].reset_index(drop=True)

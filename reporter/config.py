@@ -15,7 +15,7 @@ DEFAULTS = {
     "date_format": None,
     "platform_separator": ",",
     "currency": "₹",
-    "outlier_method": "iqr",
+    "outlier_method": "log_iqr",
     "duration_bands": {
         "edges": [0, 7, 14, 21, float("inf")],
         "labels": ["1-7 days", "8-14 days", "15-21 days", "22+ days"],
@@ -64,8 +64,8 @@ def build_config(user_cfg):
         raise ConfigError("Map either 'spend' or 'cost_per_conversion' in config.yaml")
     if "conversions" not in columns and "conversion_rate" not in columns:
         raise ConfigError("Map either 'conversions' or 'conversion_rate' in config.yaml")
-    if cfg["outlier_method"] not in ("iqr", "zscore"):
-        raise ConfigError("outlier_method must be 'iqr' or 'zscore'")
+    if cfg["outlier_method"] not in ("log_iqr", "iqr", "zscore"):
+        raise ConfigError("outlier_method must be 'log_iqr', 'iqr' or 'zscore'")
     cfg["columns"] = columns
     return cfg
 

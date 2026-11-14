@@ -21,6 +21,7 @@ class ReportData:
     by_platform: Optional[pd.DataFrame]
     weekly: Optional[pd.DataFrame]
     outliers: pd.DataFrame
+    action_list: pd.DataFrame
     top: pd.DataFrame
     bottom: pd.DataFrame
     insights: Optional[Insights] = None
@@ -59,9 +60,11 @@ def build_report(raw: pd.DataFrame, cfg, source="data") -> ReportData:
         outliers=kpis.campaign_outliers(
             campaigns, cfg["outlier_method"], th["outlier_z"], th["iqr_multiplier"]
         ),
+        action_list=pd.DataFrame(),
         top=campaigns.nlargest(n, "roi"),
         bottom=campaigns.nsmallest(n, "roi"),
         date_range=(campaigns["date"].min(), campaigns["date"].max()) if dated else None,
     )
+    data.action_list = kpis.action_list(data.outliers)
     data.insights = generate_insights(data, cfg)
     return data

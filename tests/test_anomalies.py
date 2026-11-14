@@ -82,7 +82,7 @@ def test_iqr_score_is_distance_past_the_fence():
     df = channel_campaigns([200, 200, 300, 300, 400, 400, 500, 500, 2000])
     out = kpis.campaign_outliers(df, method="iqr", iqr_multiplier=1.5)
     assert out["campaign"].tolist() == ["Email8"]
-    assert out.loc[0, "roi_score"] == pytest.approx((19 - 7) / 2)
+    assert out.loc[0, "return_score"] == pytest.approx((19 - 7) / 2)
 
 
 def test_iqr_multiplier_moves_the_fence():
@@ -105,3 +105,57 @@ def test_unknown_outlier_method_is_rejected():
         kpis.campaign_outliers(df, method="median")
     with pytest.raises(ConfigError):
         build_config({"columns": dict(COLUMNS), "outlier_method": "median"})
+
+
+# log IQR method (default)
+# ROAS 1,1,2,2,4,4,8,8 and one at 1/16. On a log2 scale that's 0,0,1,1,2,2,3,3 and -4.
+# Q1 = 0, Q3 = 2, IQR = 2 -> lower fence 0 - 1.5*2 = -3 (ROAS 2^-3 = 0.125), upper fence 5 (ROAS 32).
+WORKED_EXAMPLE = [100, 100, 200, 200, 400, 400, 800, 800, 6.25]  # revenue on spend of 100
+
+
+def test_log_iqr_worked_example():
+    df = channel_campaigns(WORKED_EXAMPLE)
+    out = kpis.campaign_outliers(df, method="log_iqr", iqr_multiplier=1.5)
+    assert out["campaign"].tolist() == ["Email8"]
+    row = out.iloc[0]
+    assert row["outlier_type"] == "Low return"
+    assert row["roas_lower_limit"] == pytest.approx(0.125)
+    # one log2 step below the fence, IQR of 2 log2 steps -> -0.5
+    assert row["return_score"] == pytest.approx(-0.5)
+
+
+def test_log_iqr_catches_low_return_that_plain_iqr_misses():
+    df = channel_campaigns(WORKED_EXAMPLE)
+    # on raw ROI the lower fence is 0 - 1.5*3 = -4.5, and ROI can never go below -1
+    plain = kpis.campaign_outliers(df, method="iqr")
+    assert plain.empty
+    assert len(kpis.campaign_outliers(df, method="log_iqr")) == 1
+
+
+def test_log_iqr_flags_high_returns_too():
+    df = channel_campaigns(WORKED_EXAMPLE + [25600])  # ROAS 256 = 2^8
+    out = kpis.campaign_outliers(df, method="log_iqr")
+    assert dict(zip(out["campaign"], out["outlier_type"])) == {
+        "Email8": "Low return", "Email9": "High return",
+    }
+
+
+def test_log_iqr_handles_zero_revenue():
+    df = channel_campaigns(WORKED_EXAMPLE[:-1] + [0])
+    out = kpis.campaign_outliers(df, method="log_iqr")
+    assert out["campaign"].tolist() == ["Email8"]
+    assert out.loc[0, "outlier_type"] == "Low return"
+
+
+def test_action_list_is_low_return_only_biggest_loss_first():
+    df = pd.concat([
+        channel_campaigns(WORKED_EXAMPLE + [25600]),
+        channel_campaigns([100, 100, 200, 200, 400, 400, 800, 800, 2], channel="SEO"),
+    ], ignore_index=True)
+    action = kpis.action_list(kpis.campaign_outliers(df, method="log_iqr"))
+    assert action["campaign"].tolist() == ["SEO8", "Email8"]  # lost 98 vs 93.75
+    assert (action["outlier_type"] == "Low return").all()
+
+
+def test_log_iqr_is_the_default(cfg):
+    assert cfg["outlier_method"] == "log_iqr"
