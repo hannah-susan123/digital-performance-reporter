@@ -1,0 +1,41 @@
+# Map your dataset's column names to the standard names the report uses.
+# To plug in a different dataset, change the right-hand side only.
+# Leave a field blank (or delete it) if your data doesn't have it.
+columns:
+  campaign: Campaign_ID
+  channel: Campaign_Type          # one channel per row
+  segment: Customer_Segment
+  platform: Channel_Used          # optional, can hold several values e.g. "WhatsApp, YouTube"
+  impressions: Impressions
+  clicks: Clicks
+  conversions: Conversions        # if blank, conversions = clicks x conversion_rate
+  conversion_rate:                # % of clicks that convert (0-100)
+  spend:                          # total spend per campaign, if the data has it
+  cost_per_conversion: Acquisition_Cost   # used when spend is blank: spend = this x conversions
+  revenue: Revenue
+  roi: ROI                        # optional, only used to cross-check our own ROI
+  duration: Duration              # campaign length in days
+  date: Date
+
+date_format: "%d-%m-%Y"
+platform_separator: ","
+currency: "₹"
+
+duration_bands:
+  edges: [0, 7, 14, 21, .inf]
+  labels: ["1-7 days", "8-14 days", "15-21 days", "22+ days"]
+
+thresholds:
+  week_change: 0.20        # flag week-on-week moves bigger than this
+  partial_week_ratio: 0.5  # weeks with fewer campaigns than this x median are partial
+  outlier_z: 3.0           # standard deviations from channel average
+  similar_gap: 0.05        # best vs worst gap below this counts as "close"
+  roi_tolerance: 0.05      # allowed difference between reported and calculated ROI
+
+report:
+  title: "Digital Campaign Performance Report"
+  top_n_campaigns: 25
+
+ai:
+  model: gemini-2.5-flash
+  api_key_env: GEMINI_API_KEY
